@@ -9,7 +9,6 @@ app.use(express.json({ limit: '15mb' }));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-// Helper function to download files to Render's local disk first
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
         const protocol = url.startsWith('https') ? https : http;
@@ -48,13 +47,13 @@ app.post('/render', async (req, res) => {
         console.log('3. Rendering video...');
         ffmpeg()
             .input(tempImg)
+            .inputOptions(['-loop 1']) // <--- THIS FIXES THE SIGSEGV CRASH!
             .input(tempAudio)
             .outputOptions(['-shortest', '-c:v libx264', '-c:a aac', '-pix_fmt yuv420p', '-r 30'])
             .save(outputPath)
             .on('end', () => {
                 console.log('4. Render finished successfully!');
                 res.download(outputPath, () => {
-                    // Clean up files
                     fs.unlinkSync(tempImg);
                     fs.unlinkSync(tempAudio);
                     fs.unlinkSync(outputPath);
