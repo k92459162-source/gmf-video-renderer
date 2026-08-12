@@ -5,7 +5,7 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const app = express();
-app.use(express.json({ limit: '20mb' })); // Increased limit for base64 images
+app.use(express.json({ limit: '20mb' }));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -38,26 +38,25 @@ function downloadFile(url, dest) {
 }
 
 app.post('/render', async (req, res) => {
-    // We now receive imageBase64 instead of imageUrl!
     const { imageBase64, audioUrl } = req.body;
     const tempImg = `/tmp/img_${Date.now()}.jpg`;
     const tempAudio = `/tmp/audio_${Date.now()}.mp3`;
     const outputPath = `/tmp/output_${Date.now()}.mp4`;
 
     try {
-        // 1. Save the Base64 image directly to Render's disk (No download needed!)
         console.log('1. Saving image from Base64 data...');
         fs.writeFileSync(tempImg, Buffer.from(imageBase64, 'base64'));
         
-        // 2. Download the audio (StreamElements)
         console.log('2. Downloading audio...', audioUrl);
         await downloadFile(audioUrl, tempAudio);
         
-        // 3. Render Video
         console.log('3. Rendering video...');
         ffmpeg()
             .input(tempImg)
-            .inputOptions(['-loop 1'])
+            .inputOptions([
+                '-loop 1',
+                '-framerate 30' // <--- THIS FIXES THE ENCODER ERROR!
+            ])
             .input(tempAudio)
             .outputOptions(['-shortest', '-c:v libx264', '-c:a aac', '-pix_fmt yuv420p', '-r 30'])
             .save(outputPath)
