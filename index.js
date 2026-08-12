@@ -5,11 +5,10 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const app = express();
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '20mb' })); // Increased limit for base64 images
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-// Updated download function with Browser Headers to bypass bot protection
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
         const protocol = url.startsWith('https') ? https : http;
@@ -25,7 +24,7 @@ function downloadFile(url, dest) {
                 return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
             }
             if (response.statusCode !== 200) {
-                return reject(new Error(`Failed to download [${url}]. Status: ${response.statusCode}`));
+                return reject(new Error(`Failed to download audio. Status: ${response.statusCode}`));
             }
             response.pipe(file);
             file.on('finish', () => {
@@ -39,18 +38,22 @@ function downloadFile(url, dest) {
 }
 
 app.post('/render', async (req, res) => {
-    const { imageUrl, audioUrl } = req.body;
+    // We now receive imageBase64 instead of imageUrl!
+    const { imageBase64, audioUrl } = req.body;
     const tempImg = `/tmp/img_${Date.now()}.jpg`;
     const tempAudio = `/tmp/audio_${Date.now()}.mp3`;
     const outputPath = `/tmp/output_${Date.now()}.mp4`;
 
     try {
-        console.log('1. Downloading image...', imageUrl);
-        await downloadFile(imageUrl, tempImg);
+        // 1. Save the Base64 image directly to Render's disk (No download needed!)
+        console.log('1. Saving image from Base64 data...');
+        fs.writeFileSync(tempImg, Buffer.from(imageBase64, 'base64'));
         
+        // 2. Download the audio (StreamElements)
         console.log('2. Downloading audio...', audioUrl);
         await downloadFile(audioUrl, tempAudio);
         
+        // 3. Render Video
         console.log('3. Rendering video...');
         ffmpeg()
             .input(tempImg)
@@ -71,8 +74,8 @@ app.post('/render', async (req, res) => {
                 res.status(500).send('FFMPEG_ERROR: ' + err.message);
             });
     } catch (err) {
-        console.error('Download Error:', err.message);
-        res.status(500).send('DOWNLOAD_ERROR: ' + err.message);
+        console.error('Error:', err.message);
+        res.status(500).send('ERROR: ' + err.message);
     }
 });
 
