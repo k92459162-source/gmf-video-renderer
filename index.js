@@ -9,16 +9,23 @@ app.use(express.json({ limit: '15mb' }));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
+// Updated download function with Browser Headers to bypass bot protection
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
         const protocol = url.startsWith('https') ? https : http;
+        const options = {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': '*/*'
+            }
+        };
         const file = fs.createWriteStream(dest);
-        protocol.get(url, (response) => {
+        protocol.get(url, options, (response) => {
             if (response.statusCode === 301 || response.statusCode === 302) {
                 return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
             }
             if (response.statusCode !== 200) {
-                return reject(new Error(`Failed to download. Status: ${response.statusCode}`));
+                return reject(new Error(`Failed to download [${url}]. Status: ${response.statusCode}`));
             }
             response.pipe(file);
             file.on('finish', () => {
@@ -38,16 +45,16 @@ app.post('/render', async (req, res) => {
     const outputPath = `/tmp/output_${Date.now()}.mp4`;
 
     try {
-        console.log('1. Downloading image...');
+        console.log('1. Downloading image...', imageUrl);
         await downloadFile(imageUrl, tempImg);
         
-        console.log('2. Downloading audio...');
+        console.log('2. Downloading audio...', audioUrl);
         await downloadFile(audioUrl, tempAudio);
         
         console.log('3. Rendering video...');
         ffmpeg()
             .input(tempImg)
-            .inputOptions(['-loop 1']) // <--- THIS FIXES THE SIGSEGV CRASH!
+            .inputOptions(['-loop 1'])
             .input(tempAudio)
             .outputOptions(['-shortest', '-c:v libx264', '-c:a aac', '-pix_fmt yuv420p', '-r 30'])
             .save(outputPath)
