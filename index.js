@@ -53,11 +53,12 @@ app.post('/render', async (req, res) => {
         console.log('3. Rendering video...');
         ffmpeg()
             .input(tempImg)
-            .inputOptions([
-                '-loop 1',
-                '-framerate 30' // <--- THIS FIXES THE ENCODER ERROR!
-            ])
+            .inputOptions(['-loop 1', '-framerate 30'])
             .input(tempAudio)
+            .videoFilters([
+                'scale=720:1280:force_original_aspect_ratio=increase', // Scale to fit
+                'crop=720:1280' // Crop to exact even dimensions
+            ])
             .outputOptions(['-shortest', '-c:v libx264', '-c:a aac', '-pix_fmt yuv420p', '-r 30'])
             .save(outputPath)
             .on('end', () => {
